@@ -1,0 +1,540 @@
+\documentclass[a4paper]{report}
+\usepackage[round]{natbib}
+
+\usepackage{Rnews}
+\usepackage{fancyvrb}
+\usepackage{Sweave}  
+
+\DefineVerbatimEnvironment{Sinput}{Verbatim}{fontsize=\small,fontshape=sl}
+\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\small}
+\DefineVerbatimEnvironment{Scode}{Verbatim}{fontsize=\small,fontshape=sl}
+
+%% \SweaveOpts{prefix.string=graphics/portfolio}
+
+\bibliographystyle{abbrvnat}
+
+\begin{document}
+\begin{article}
+\title{Backtests}
+\author{Kyle Campbell, Jeff Enos, Daniel Gerlanc and David Kane}
+
+%%\VignetteIndexEntry{Using the backtest package}
+%%\VignetteDepends{backtest}
+
+<<echo = FALSE>>=
+options(width = 50, digits = 2, scipen = 5)
+set.seed(1)
+cat.df.without.rownames <- function (d, file = ""){
+  stopifnot(is.data.frame(d))
+  row.names(d) <- 1:nrow(d)
+  x <- NULL
+  conn <- textConnection("x", "w", local = TRUE)
+  capture.output(print(d), file = conn)
+  close(conn)
+  cat(substring(x, first = max(nchar(row.names(d))) + 2), sep = "\n", 
+      file = file)
+}
+@ 
+
+\maketitle
+
+\setkeys{Gin}{width=0.95\textwidth}
+
+\section*{Introduction}
+
+The \pkg{backtest} package provides facilities for exploring
+portfolio-based conjectures about financial instruments (stocks, bonds,
+swaps, options, et cetera).  For example, consider a claim that stocks
+for which analysts are raising their earnings estimates perform better
+than stocks for which analysts are lowering estimates.  We want to
+examine if, on average, stocks with raised estimates have higher
+future returns than stocks with lowered estimates and whether this is
+true over various time horizons and across different categories of
+stocks.  Colloquially, ``backtest'' is the term used in finance for
+such tests.
+
+\section*{Background}
+To demonstrate the capabilities of the \pkg{backtest} package we will
+consider a series of examples based on a single real-world data set.
+StarMine\footnote{See www.starmine.com for details.} is a San
+Fransisco research company which creates quantitative equity models
+for stock selection.  According to the company:
+
+% Note that we make the font size for this quote small and then go
+% back to normal.
+
+\small
+
+\begin{quote}
+  StarMine Indicator is a 1-100 percentile ranking of stocks that is
+  predictive of future analyst revisions. StarMine Indicator improves
+  upon basic earnings revisions models by:
+
+\begin{itemize}
+\item Explicitly considering management guidance.
+  
+\item Incorporating SmartEstimates, StarMine's superior estimates
+  constructed by putting more weight on the most accurate analysts.
+  
+\item Using a longer-term (forward 12-month) forecast horizon (in
+  addition to the current quarter).
+
+\end{itemize}
+
+StarMine Indicator is positively correlated to future stock price
+movements. Top-decile stocks have annually outperformed bottom-decile
+stocks by 27 percentage points over the past ten years across all
+global regions.
+\end{quote}
+
+\normalsize
+
+These ranks and other attributes of stocks are in the
+\texttt{starmine} data frame, available as part of the
+\pkg{backtest} package.
+
+<<echo=FALSE, results=hide>>=
+library(backtest)
+@ 
+
+<<echo=TRUE>>=
+data(starmine)
+names(starmine)
+@ 
+
+\texttt{starmine} contains selected attributes such as sector, market
+capitalisation, country, and various measures of return for a universe
+of approximately 6,000 securities.  The data is on a monthly frequency
+from January, 1995 through November, 1995.  The number of observations
+varies over time from a low of 4,528 in February to a high of 5,194 in
+November.
+
+<<echo=FALSE>>=
+cat.df.without.rownames(as.data.frame.table(table(date = as.character(starmine$date)), responseName = "count"))
+@ 
+
+The \texttt{smi} column contains the StarMine Indicator score for each
+security and date if available.  Here is a sample of rows
+and columns from the data frame:
+
+<<echo=false>>=
+current.options <- options(digits = 1, width = 80, scipen = 99)
+@
+
+<<echo=false>>=
+cat.df.without.rownames(starmine[row.names(starmine) %in% c(2254, 9852, 10604, 18953, 62339, 77387, 85739), c("date", "name", "ret.0.1.m", "ret.0.6.m","smi")])
+@ 
+
+<<echo=false>>=
+options(current.options)
+@
+
+Most securities (like LoJack above) have multiple entries in the data
+frame, each for a different date.  The row for Supercuts indicates
+that, as of the close of business on August 31, 1995, its \texttt{smi}
+was 57.  During the month of September, its return (i.e.,
+\texttt{ret.0.1.m}) was -11\%.
+
+\section*{A simple backtest}
+
+Backtests are run by calling the function \texttt{backtest} to
+produce an object of class \texttt{backtest}.
+
+<<echo = TRUE>>=
+bt <- backtest(starmine, in.var = "smi", ret.var = "ret.0.1.m", by.period = FALSE)
+@
+
+\texttt{starmine} is a data frame containing all the information
+necessary to conduct the backtest.  \texttt{in.var} and
+\texttt{ret.var} identify the columns containing the input and return
+variables, respectively. \texttt{backtest} splits observations into 5
+(the default) quantiles, or ``buckets,'' based on the value of
+\texttt{in.var}.  Lower (higher) buckets contain smaller (larger)
+values of \texttt{in.var}.  Each quantile contains an approximately
+equal number of observations.  This backtest creates quantiles
+according to values in the \texttt{smi} column of \texttt{starmine}.
+
+<<echo=false>>=
+table(cut(starmine$smi, breaks = quantile(starmine$smi, probs=seq(0,1,0.20), 
+                          na.rm=TRUE, 
+                          names=TRUE), 
+          include.lowest = TRUE))
+@ 
+
+\texttt{backtest} calculates the average return within each bucket.
+From these averages we calculate the spread, or the difference between
+the average return of the highest and lowest buckets.
+
+Calling \texttt{summary} on the resulting object of class
+\texttt{backtest} reports the \texttt{in.var}, \texttt{ret.var}, and
+\texttt{by.var} used.  We will use a \texttt{by.var} in later
+backtests.
+
+<< echo = TRUE>>=
+summary(bt)
+@
+
+This backtest is an example of a \emph{pooled} backtest. In such a
+backtest, we assume that all observations are exchangeable.  This
+means that a quantile may contain observations for any stock and from
+any date.  Quantiles may contain multiple observations for the same
+stock.
+
+The backtest summary shows that the average return for the highest
+bucket was 3.2\%.  This value is the mean one month forward return of
+stocks with \texttt{smi} values in the highest quantile.  As the
+observations are exchangeable, we use every observation in the
+\texttt{starmine} data frame with a non-missing \texttt{smi} value.
+This means that the returns for LoJack from both 1995-01-31 and
+1995-02-28 would contribute to the 3.2\% mean of the high bucket.
+
+The backtest suggests that StarMine's model predicted performance
+reasonably well.  On average, stocks in the highest quantile returned
+3.2\% while stocks in the lowest quantile returned 1.1\%.  The spread
+of 2.1\% suggests that stocks with high ratings perform better than
+stocks with low ratings.
+
+\section*{Natural backtests}
+
+A \emph{natural} backtest requires that the frequency of returns and
+observations be the same.  
+
+A natural backtest approximates the following implementation
+methodology: in the first period form an equal weighted portfolio with
+long positions in the stocks in the highest quantile and short
+positions in the stocks in the lowest quantile.  Each stock has an
+equal weight in the portfolio; if there are 5 stocks on the long side,
+each stock has a weight of 20\%.  Subsequently rebalance the portfolio
+every time the \texttt{in.var} values change.  If the observations
+have a monthly frequency, the \texttt{in.var} values change monthly
+and the portfolio must be rebalanced accordingly.  When the
+\texttt{in.var} values change, rebalancing has the effect of exiting
+positions that have left the top and bottom quantiles and entering
+positions that have entered the top and bottom quantiles.  If the data
+contains monthly observations, we will form 12 portfolios per year.
+
+To create a simple natural backtest, we again call \texttt{backtest}
+using \texttt{ret.0.1.m}. This is the only return value in
+\texttt{starmine} for which we can construct a natural backtest of
+\texttt{smi}.
+
+<<natural portfolio>>=
+bt <- backtest(starmine, id.var = "id",
+               date.var = "date", in.var = "smi",
+               ret.var = "ret.0.1.m", natural = TRUE, by.period = FALSE)
+@
+
+Natural backtests require a \texttt{date.var} and \texttt{id.var}, the
+names of the columns in the data frame containing the dates of the
+observations and unique security identifiers, respectively.  Calling
+\texttt{summary} displays the results of the backtest:
+
+<<echo=false>>=
+current.options <- options()
+options(digits = 1, width = 80)
+@
+
+\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\footnotesize}
+
+<<summary natural backtest>>=
+summary(bt)
+@ 
+
+\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\small}
+
+<<echo=false>>=
+options(current.options)
+@
+
+Focus on the mean return of the highest quantile for 1995-02-28 of
+1.3\%.  \texttt{backtest} calculated this value by first computing the
+5 quantiles of the input variable \code{smi} over all observations in
+\code{starmine}.  Among the observations that fall into the highest
+quantile, those with date 1995-02-28 contribute to the mean return of
+1.3\%.  It is important to note that the input variable quantiles are
+computed over the whole dataset, as opposed to within each category
+that may be defined by a \code{date.var} or \code{by.var}.
+
+The bottom row of the table contains the mean quantile return over all
+dates.  On account of the way we calculate quantile means, a single
+stock will have more effect on the quantile mean if during that month
+there are fewer stocks in the quantile.  Suppose that during January
+there are only 2 stocks in the low quantile.  The return of a single
+stock in January will account for $\frac{1}{22}$ of the quantile mean.
+This is different than a pooled backtest where every observation
+within a quantile has the same weight.  In a natural backtest, the
+weight of a single observation depends on the number of observations
+for that period.
+
+Calling \texttt{summary} yields information beyond that offered by the
+\texttt{summary} method of a pooled backtest.  The first piece of
+extra information is average turnover.  Turnover is the percentage of
+the portfolio we would have to change each month if we implemented the
+backtest as a trading strategy.  For example, covering all the shorts
+and shorting new stocks would yield a turnover of 50\% because we
+changed half the portfolio.  We trade stocks when they enter or exit
+the extreme quantiles due to \texttt{in.var} changes.  On average, we
+would turn over 50\% of this portfolio each month.
+
+The second piece of extra information is mean spread.  The spread was
+positive each month, so on average the stocks with the highest
+\texttt{smi} values outperformed the stocks with the lowest
+\texttt{smi} values.  On average, stocks in the highest quantile
+outperformed stocks in the lowest quantile by 2\%.  The third piece of
+extra information, the standard deviation of spread, is 1\%.  The
+spread varied from month to month, ranging from a low of close to 0\%
+to a high of over 4\%.
+
+We define the fourth piece of extra information, raw (non-annualized)
+Sharpe ratio, as $\frac{\textrm{return}}{\textrm{risk}}$. We set
+return equal to mean spread return and use the standard deviation of
+spread return as a measure of risk.
+
+\section*{More than one \texttt{in.var}}
+
+\texttt{backtest} allows for more than one \texttt{in.var} to be
+tested simultaneously. Besides using \texttt{smi}, we will test market
+capitalisation in dollars, \texttt{cap.usd}. This is largely a
+nonsense variable since we do not expect large cap stocks to
+outperform small cap stocks --- if anything, the reverse is true
+historically.
+
+<<echo=false>>=
+op <- options(digits = 1)
+@ 
+
+<<smi.2 backtest>>=
+bt <- backtest(starmine,
+                     id.var = "id",
+                     date.var = "date",
+                     in.var = c("smi", "cap.usd"),
+                     ret.var = "ret.0.1.m",
+                     natural = TRUE,
+                     by.period = FALSE)
+@ 
+
+<<echo=false>>=
+bt.save <- bt
+@ 
+
+Because more than one \texttt{in.var} was specified, only the spread
+returns for each \texttt{in.var} are displayed, along with the summary
+statistics for each variable.
+
+<<>>=
+summary(bt)
+@ 
+<<echo=false>>=
+options(op)
+@ 
+
+Viewing the results for the two input variables side-by-side allows us
+to compare their performance easily.  As we expected, \texttt{cap.usd}
+as an input variable did not perform as well as \texttt{smi} over our
+backtest period.  While \texttt{smi} had a positive return during each
+month, \texttt{cap.usd} had a negative return in 6 months and a
+negative mean spread.  In addition, the spread returns for
+\texttt{cap.usd} were twice as volatile as those of \texttt{smi}.
+
+There are several plotting facilities available in \texttt{backtest}
+that can help illustrate the difference in performance between these
+two signals.  These plots can be made from a natural backtest with any
+number of input variables.  Below is a bar chart of the monthly
+returns of the two signals together:
+
+\begin{figure}
+\centering
+\vspace*{.1in}
+<<fig=TRUE>>=
+plot(bt, type = "return")
+@ 
+\caption{\label{figure:return}
+Monthly return spreads.}
+\end{figure}
+
+Returns for \texttt{smi} were consistently positive.  Returns for
+\texttt{cap.usd} were of low quality, but improved later in the
+period.  \texttt{cap.usd} had a particularly poor return in June. We
+can also plot cumulative returns for each input variable:
+
+\begin{figure}
+\centering
+\vspace*{.1in}
+<<fig=TRUE>>=
+plot(bt.save, type = "cumreturn.split")
+@ 
+\caption{\label{figure:fanplot}
+Cumulative spread and quantile returns.}
+\end{figure}
+
+The top region in this plot shows the cumulative return of each signal
+on the same return scale, and displays the total return and worst
+drawdown of the entire backtest period.  The bottom region shows the
+cumulative return of the individual quantiles over time.  We can see
+that \texttt{smi}'s top quantile performed best and lowest quantile
+performed worst.  In contrast, \texttt{cap.usd}'s lowest quantile was
+its best performing.
+
+Though it is clear from the summary above that \texttt{smi} generated
+about 5 times as much turnover as \texttt{cap.usd}, a plot is
+available to show the month-by-month turnover of each signal:
+
+\begin{figure}
+\centering
+\vspace*{.1in}
+<<fig=TRUE>>=
+plot(bt, type = "turnover")
+@ 
+\caption{\label{figure:turnover}
+Monthly turnover.}
+\end{figure}
+
+This chart shows that the turnover of \texttt{smi} was consistently
+around 50\% with lower turnover in September and October, while the
+turnover of \texttt{cap.usd} was consistently around 10\%.
+
+\section*{Using \texttt{by.var}}
+
+In another type of backtest we can look at quantile spread returns
+\emph{by} another variable.  Specifying \texttt{by.var} breaks up
+quantile returns into categories defined by the levels of the
+\texttt{by.var} column in the input data frame.  Consider a backtest
+of \texttt{smi} by \texttt{sector}:
+
+<<echo=false>>=
+current.options <- options()
+options(digits = 1, width = 50)
+@
+
+<<sector backtest>>=
+bt <- backtest(starmine, in.var = "smi", ret.var = "ret.0.1.m", by.var = "sector", by.period = FALSE)
+@ 
+
+<<echo=FALSE>>=
+options(width = 80)
+@ 
+
+<<>>=
+summary(bt)
+@ 
+
+<<echo=false>>=
+options(current.options)
+@ 
+
+This backtest categorises observations by the quantiles of
+\texttt{smi} and the levels of \texttt{sector}.  The highest spread
+return of 2.6\% occurs in \texttt{Shops}.  Since \texttt{smi}
+quantiles were computed before the observations were split into groups
+by \texttt{sector}, however, we can not be sure how much confidence to
+place in this result.  There could be very few observations in this
+sector or one of the top and bottom quantiles could have a
+disproportionate number of observations, thereby making the return
+calculation suspect. \texttt{counts} provides a simple check.
+
+<<counts>>=
+counts(bt)
+@ 
+
+While there seems to be an adequate number of observations in
+\texttt{Shops}, it is important to note that there are approximately
+60\% more observations contributing to the mean return of the lowest
+quantile than to the mean return of the highest quantile, 870 versus
+548.  Overall, we should be more confident in results for
+\texttt{Manuf} and \texttt{Money} due to their larger sample sizes.
+We might want to examine the result for \texttt{HiTec} more closely,
+however, since there are more than twice the number of observations in
+the highest quantile than the lowest.
+
+\texttt{by.var} can also be numeric, as in this backtest using
+\texttt{cap.usd}:
+
+<<echo=false>>=
+current.options <- options()
+options(digits = 1, width = 30)
+@
+
+<<market cap, echo=TRUE>>=
+bt <- backtest(starmine, in.var = "smi", ret.var = "ret.0.1.m", by.var = "cap.usd", buckets = c(5, 10), by.period = FALSE)
+@ 
+
+<<echo=false>>=
+options(current.options)
+@
+
+<<>>=
+summary(bt)
+@ 
+
+Since \texttt{cap.usd} is numeric, the observations are now split by
+two sets of quantiles.  Those listed across the top are, as before, the
+input variable quantiles of \texttt{smi}.  The row names are the
+quantiles of \texttt{cap.usd}.  The \texttt{buckets} parameter of
+\texttt{backtest} controls the number of quantiles. The higher returns
+in the lower quantiles of \texttt{cap.usd} suggests that \texttt{smi}
+performs better in small cap stocks than in large cap stocks.
+
+\section*{Multiple return horizons}
+
+Using \texttt{backtest} we can also analyse the performance of a
+signal relative to multiple return horizons.  Below is a backtest that
+considers one month and six month forward returns together:
+
+%\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\scriptsize}
+%\DefineVerbatimEnvironment{Sinput}{Verbatim}{fontsize=\footnotesize}
+
+<<echo = TRUE>>=
+bt <- backtest(starmine, in.var = "smi", buckets = 4,
+               ret.var = c("ret.0.1.m", "ret.0.6.m"), by.period = FALSE)
+@ 
+
+<<echo=false>>=
+op <- options(width = 80)
+@
+
+<<>>=
+summary(bt)
+@ 
+
+
+%\DefineVerbatimEnvironment{Sinput}{Verbatim}{fontsize=\small}
+%\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\small}
+
+The performance of \texttt{smi} over these two return horizons tells
+us that the power of the signal degrades after the first month.  Using
+six month forward return, \texttt{ret.0.6.m}, the spread is 6\%.
+This is only 3 times larger than the 2\% spread return in the first
+month despite covering a period which is 6 times longer. In other
+words, the model produces 2\% spread returns in the first month but
+only 4\% in the 5 months which follow.
+
+<<echo=false>>=
+options(op)
+@ 
+
+\section*{Conclusion}
+
+The \pkg{backtest} package provides a simple collection of tools for
+performing portfolio-based tests of financial conjectures.  A much
+more complex package, \pkg{portfolioSim}, provides facilities for
+historical portfolio performance analysis using more realistic
+assumptions.  Built on the framework of the
+\pkg{portfolio}\footnote{See \cite{kane:david} for an introduction to
+  the \pkg{portfolio} package.} package, \pkg{portfolioSim} tackles
+the issues of risk exposures and liquidity constraints, as well as
+arbitrary portfolio construction and trading rules.  Above all, the
+flexibility of \R{} itself allows users to extend and modify these
+packages to suit their own needs.  Before reaching that level of
+complexity, however, \pkg{backtest} provides a good starting point for
+testing a new conjecture.
+
+  \address{Kyle Campbell, Jeff Enos, Daniel Gerlanc and David Kane \\
+    Kane Capital Management \\
+    Cambridge, Massachusetts, USA\\
+    \email{Kyle.W.Campbell@williams.edu}, \email{jeff@kanecap.com},
+    \email{dgerlanc@gmail.com} and \email{david@kanecap.com}}
+
+\bibliography{backtest}
+
+\end{article}
+\end{document}

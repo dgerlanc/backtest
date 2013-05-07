@@ -1,0 +1,31 @@
+Version: 0.3-0 (2008-09-12, released)
+
+	* Added totalCounts method. Counts non-NA values that went into 
+          the calculation of spreads
+
+	* Method summaryStats made public.
+
+	* Fixed overlaps order of operations bug in backtest.function.
+
+	* Added returns and financials columns to starmine data.
+
+Version: 0.2-0 (2007-07-02, released)
+
+	* Added overlaps feature for controlling turnover.
+
+	* The user may specify a factor as in.var to define quantiles.
+
+	* Added by.period option for calculating quantiles within periods,
+	now the default.
+
+	* Added do.spread option to toggle spread calculation.
+	
+Version: 0.1-2 (2007-04-12, released)
+
+	* Fixed handling of the universe parameter.
+
+	* Added stop if there are quantiles with no observations.  Usually
+	occurs with very little or very regular (usually synthesized)
+	data.
+ 	
+	* Updated 'backtest' vignette.

@@ -1,0 +1,23 @@
+importFrom("graphics", plot)
+
+export(
+       "backtest"
+       )
+
+exportClasses(
+              "backtest"
+              )
+
+exportMethods(
+              "show",
+              "summary",
+              "summaryStats",
+              "plot",
+              "means",
+              "counts",
+              "totalCounts",
+              "marginals",
+              "naCounts",
+              "turnover",
+              "ci"
+              )

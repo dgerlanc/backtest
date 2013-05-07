@@ -1,0 +1,16 @@
+Thanks to Gabor Grothendieck for the following suggestions:
+
+- Allow a formula interface:
+
+backtest(ret.var ~ in.var + by.var, DF)
+
+and maybe
+
+backtest(ret.var ~ in.var | by.var, DF)
+
+which would do a separate ret.var ~ in.var analysis for each level
+of by.var.
+
+- Allow backtest to still give full info, not just the spread (this
+could be user specifiable) even if there is a by.var.  For example,
+maybe the second formula above with a | could specify the full report.
