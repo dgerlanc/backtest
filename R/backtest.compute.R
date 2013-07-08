@@ -6,7 +6,7 @@
 ##
 ################################################################################
 
-## Returns a backtest object. "x" is a daga frame containing all raw
+## Returns a backtest object. "x" is a data frame containing all raw
 ## data. "buckets.var" is the bucketized version of "in.var" from
 ## backtest.function.R and is assumed to be factored. "ret.var", "by.var",
 ## and "date.var" are character strings corresponding to column names in

@@ -1,3 +1,7 @@
+Version: 0.3-1 (2013-07-08, released)
+
+	* Fixed spelling and grammar in comments.
+
 Version: 0.3-0 (2008-09-12, released)
 
 	* Added totalCounts method. Counts non-NA values that went into 
