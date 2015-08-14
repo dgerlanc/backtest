@@ -1,9 +1,9 @@
 Package: backtest
 Type: Package
-Title: Exploring portfolio-based conjectures about financial
-        instruments
-Version: 0.3-2
-Date: 2013-07-08
+Title: Exploring Portfolio-Based Conjectures About Financial
+        Instruments
+Version: 0.3-4
+Date: 2015-08-14
 Author: Jeff Enos <jeff@kanecap.com> and David Kane <dave@kanecap.com>,
         with contributions from Kyle Campbell
         <kyle.w.campbell@williams.edu>, Daniel Gerlanc
