@@ -2,7 +2,7 @@ importFrom("graphics", plot)
 importFrom("grid", pushViewport, viewport, grid.text, gpar, popViewport)
 importFrom("lattice", barchart, panel.lines, panel.superpose, panel.xyplot,
            xyplot)
-importFrom("methods", "new")
+importFrom("methods", "new", "show")
 importFrom("stats", "as.formula", "formula", "median", "quantile",
            "reshape", "sd", "weighted.mean")
 importFrom("utils", "tail")

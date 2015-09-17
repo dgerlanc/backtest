@@ -5,3 +5,4 @@
 *-Ex.R
 *.Rproj
 .Rbuildignore
+.Rproj.user
